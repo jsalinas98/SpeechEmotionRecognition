@@ -16,16 +16,44 @@ from sklearn.model_selection import train_test_split
 class SER_CNN_LSTM(SpeechEmotionRecognizer):
 
     def dataProcess(self):
-        self.audios = self.pad_signal()
-        mel_spec = np.asarray(list(map(self.mel_spectrogram, self.audios)))
+        print('Pocressing data')
+        self.X = self.pad_signal()
+        self.X = self.preEmphasis(self.X)
+        #print(self.X.shape)
+        #self.X = self.framing(self.X, 1024, 512)
+        #print(self.X.shape)
+        #self.X = self.windowing(self.X, 1024) 
+        #print(self.X.shape)
+        #self.X = self.mfcc(self.X)
+        #print(self.X.shape)
+        
+        mel_spec = np.asarray(list(map(self.mel_spectrogram, self.X)))
         self.X = np.asarray(list(map(self.frame, mel_spec)))
-
+        
         self.X = self.X.reshape(self.X.shape[0], self.X.shape[1] , self.X.shape[2], self.X.shape[3], 1)
-
+        
         encoder = OneHotEncoder()
         self.Y = encoder.fit_transform(np.array(self.labels).reshape(-1,1)).toarray()
 
         print('Data processed correctly!')
+        
+
+    def preEmphasis(self, audio):
+        print('preemphasis data')
+        return librosa.effects.preemphasis(audio)
+
+    def framing(self, audio, frame_len, hop_len):
+        return librosa.util.frame(audio, frame_length=frame_len, hop_length=hop_len)
+       
+    def windowing(self, frames, frame_len):
+        return np.hanning(frame_len).reshape(-1, 1)*frames
+
+    def mfcc(self, audios):
+        print(len(audios))
+        result = []
+        for audio in audios:
+            result.append(librosa.feature.mfcc(y=audio, sr=self.sampleRate, n_fft=64))
+        return np.array(result)
 
     def pad_signal(self):
 
@@ -46,7 +74,7 @@ class SER_CNN_LSTM(SpeechEmotionRecognizer):
 
             signal.append(audio)
 
-        return signal
+        return np.array(signal)
 
     # Compute mel spectogram
     def mel_spectrogram(self, data, sr=16000, n_fft=512, win_length=256, hop_length=128, window='hamming', n_mels=128, fmax=4000, graph=False):
@@ -114,7 +142,7 @@ class SER_CNN_LSTM(SpeechEmotionRecognizer):
                                     
         # Apply 2 LSTM layer and one FC
         y = LSTM(256, return_sequences=False, dropout=0.2, name='LSTM_1')(y)
-        y = Dense(self.Y.hape[1], activation='softmax', name='FC')(y)
+        y = Dense(self.Y.shape[1], activation='softmax', name='FC')(y)
 
         # Build final model
         self.model = Model(inputs=input_y, outputs=y)
@@ -129,20 +157,7 @@ class SER_CNN_LSTM(SpeechEmotionRecognizer):
 
         self.model.save('/Models/CNN_LSTM_001.h5')
 
-    def test(self):
-        pass
-
     def predict(self):
         pass
 
-recognizer = SER_CNN_LSTM()
 
-dataset = pd.read_csv('C:\\Users\\jsali\\OneDrive - UNIVERSIDAD DE SEVILLA\\Universidad\\MIERA\\TFM_SER\\dataset.csv')
-
-recognizer.loadData(dataset.path, dataset.emotion)
-
-recognizer.dataProcess()
-
-recognizer.createModel()
-
-recognizer.train()º
